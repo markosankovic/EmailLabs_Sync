@@ -1,0 +1,34 @@
+EmailLabs_Sync
+
+Requirements:
+
+The update of member statuses should run as frequently as is manageable, again getting a list of all members who have unsubscribed since yesterday and then syncing that data up.
+
+Process 1:
+
+Retrieve the newly added (since start of yesterday) records with a status of "active" from the oldsite.
+Add retrieved records to the equivalent list on newsite.
+If record already exists on the list on newsite, the record is not added again rather the record on newsite is updated.
+
+Process 2:
+
+Retrieve newly updated (since start of yesterday) records with a "status" of "trashed", "unsubscribed", "bounced", "trashedbyadmin" from the oldsite.
+Update retrieved records to the newsite.
+If record already exists on the newsite the status will be updated on the newsite.
+If record does not exist on the newsite the record will be added to the newsite with the appropriate status
+
+Process 3:
+
+Retrieve newly updated (since start of yesterday) records with a "status" of "trashed", "unsubscribed", "bounced", "trashedbyadmin" from the newsite.
+Add retrieved records to the oldsite.
+If record already exists on the oldsite the status will be updated on the oldsite.
+If record does not exist on the oldsite the record will be added to the oldsite with the appropriate status
+
+Additionally there are these considerations:
+
+* The oldsite <-> newsite list mappings will be kept / maintained in a config.ini type file.
+* No admin interface is required, however informative messages / comments in the code will be of help.
+* The script will be run from cron.
+* Of key importance with this script is to default to the safest possible outcome for deliverability - where if in doubt then best to leave the member's record deactivated.
+* Any updates to either newsite or oldsite member records will need to be logged in a text file on the server - one line per update detailing the list being updated and completed details.
+
