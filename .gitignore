@@ -1,0 +1,4 @@
+# Ignore config.ini
+config.ini
+# Ignore log files
+*.log
