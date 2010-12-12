@@ -34,3 +34,21 @@ Additionally there are these considerations:
 
 USAGE
 
+In order to perform processes from request use following scripts: proccess_1.php, process_2.php, process_3.php
+
+Configuration will be read from: config.ini. You will have to specify endpoint, password and site_id for each new_site and old_site sections.
+Mailing lists mlid mapping of one section should match the same key as in other section. Number of mailing lists mlid should match.
+You can also specify passwords per mailing lists. When doing so, password should match mlid key in the same section.
+Please take a look at the example:
+
+[old_site]
+mailing_lists.mlid[] = 68
+mailing_lists.mlid[5] = 12
+
+[new_site]
+mailing_lists.password[] = "xyz123"
+mailing_lists.password[5] = "abc567"
+mailing_lists.mlid[] = 55013
+mailing_lists.mlid[5] = 15
+
+Example of sync call: $emailLabsSync->syncRecords(array('type' => 'active', 'start_datetime' => 200));

@@ -233,11 +233,11 @@ class EmailLabs_Sync implements SplSubject, EmailLabs_Loggable
         // Set all available query listdata parameters
 
         // Encoding
-        if(isset($params['encoding']))      $originClient->addData($params['encoding'], 'extra', 'encoding');
+        if(isset($params['encoding'])) $originClient->addData($params['encoding'], 'extra', 'encoding');
         // Go to Page Number
-        if(isset($params['page']))          $originClient->addData((int)$params['page'], 'extra', 'page');
+        if(isset($params['page'])) $originClient->addData((int)$params['page'], 'extra', 'page');
         // # of Records to Show
-        if(isset($params['pagelimit']))     $originClient->addData((int)$params['pagelimit'], 'extra', 'pagelimit');
+        if(isset($params['pagelimit'])) $originClient->addData((int)$params['pagelimit'], 'extra', 'pagelimit');
         // Show by Date
         if(isset($params['date'])) {
             if(preg_match("/^[A-Z]+[a-z]+\s\d{1,2},\s\d{4,4}$/", $params['date'])) {
@@ -250,7 +250,7 @@ class EmailLabs_Sync implements SplSubject, EmailLabs_Loggable
                 $originClient->addData(date("F d, Y", time() - abs($params['start_datetime']) * 86400), 'extra', 'start_datetime');
             } else {
                 if(preg_match("/^[A-Z]+[a-z]+\s\d{1,2},\s\d{4,4}$/", $params['start_datetime'])) {
-                    $originClient->addData((int)$params['start_datetime'], 'extra', 'start_datetime');
+                    $originClient->addData($params['start_datetime'], 'extra', 'start_datetime');
                 }
             }
         }
@@ -260,7 +260,7 @@ class EmailLabs_Sync implements SplSubject, EmailLabs_Loggable
                 $originClient->addData(date("F d, Y", time() - abs($params['end_datetime']) * 86400), 'extra', 'end_datetime');
             } else {
                 if(preg_match("/^[A-Z]+[a-z]+\s\d{1,2},\s\d{4,4}$/", $params['end_datetime'])) {
-                    $originClient->addData((int)$params['end_datetime'], 'extra', 'end_datetime');
+                    $originClient->addData($params['end_datetime'], 'extra', 'end_datetime');
                 }
             }
         }
@@ -292,9 +292,9 @@ class EmailLabs_Sync implements SplSubject, EmailLabs_Loggable
 
             // Get mailing list records
             $originResult = $originClient->recordQueryListdata();
-
+            
             if($originResult->isError()) {
-                $this->_setMessageException($message, Zend_Log);
+                $this->_setMessageException("Could not fetch origin records for mlid $mlid: {$originResult->getData()}", Zend_Log::ERR)->notify();
                 continue;
             }
 
@@ -316,21 +316,22 @@ class EmailLabs_Sync implements SplSubject, EmailLabs_Loggable
                                 if(isset($demographicMapping[$id])) { // Mapping exists
                                     $data[] = array("type" => $type, "id" => $demographicMapping[$id], "value" => $name);
                                 } else {
-                                    // Log inappropriate demographic mapping
+                                    $this->_setMessageException("Demographic mismatch $name($id)", Zend_Log::WARN)->notify();
                                 }
                             } else {
                                 $data[] = array("type" => $type, "id" => $id, "value" => $name);
                             }
                         }
                     } else {
-                        if($type == "email") $email = $value; // Remember email
-                        $data[] = array("type" => $type, "value" => $value);
+                        if($type == "email") $email = $value;
+                        $data[] = array("type" => $type, "value" => $value); // Notice no id
                     }
                 }
                 
                 // Perform record add request
                 if($data) {
                     // See if record with same email exists
+                    // TODO: Make fewer http requests
                     $recordQueryDataResult = $targetClient->recordQueryData($email);
                     // Add or update
                     if($recordQueryDataResult->isSuccess()) { // Record exists, update

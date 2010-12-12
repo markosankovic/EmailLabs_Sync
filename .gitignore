@@ -2,3 +2,4 @@ config.ini
 log
 *.log
 nbproject
+library/Zend

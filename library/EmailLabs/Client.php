@@ -110,7 +110,7 @@ class EmailLabs_Client
     $dataPart
 </DATASET>
 XML;
-        echo "$xml\n";
+        //echo "$xml\n";
 
         $this->getHttpClient()->setUri($this->getEndpoint())
                               ->setParameterPost('type', $type)
@@ -118,7 +118,7 @@ XML;
                               ->setParameterPost('input', $xml);
         $response = $this->getHttpClient()->request();
 
-        //echo $response->getBody() . "\n";
+        //echo "{$response->getBody()}\n";
 
         return $response->getBody();
     }

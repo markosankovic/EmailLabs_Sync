@@ -15,12 +15,20 @@
     $target = $newSiteConfig->toArray();
 
     $emailLabsSync = new EmailLabs_Sync($origin, $target);
-    
+    $emailLabsSync->attach(new EmailLabs_Logger('log/test.log'));
+
     try {
-        $emailLabsSync->attach(new EmailLabs_Logger('log/sync.log'));
-        $emailLabsSync->syncRecords(array('type' => 'active', 'start_datetime' => 300));
+        //$emailLabsSync->syncRecords(array('type' => 'active', 'start_datetime' => 1));
     } catch(Exception $e) {
         echo $e->getMessage();
     }
-    
+
+
+    $client = new EmailLabs_Client($origin['endpoint'], $origin['site_id'], $origin['password']);
+    $client->setMlid(68);
+    $client->addData('trashed', 'extra', 'type');
+    $client->addData('January 1, 2010', 'extra', 'start_datetime');
+    $result = $client->perform('record', 'query-listdata', array(), 'EmailLabs_Result_Record');
+
+    var_dump($result->getData());
     
