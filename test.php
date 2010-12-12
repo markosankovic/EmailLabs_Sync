@@ -11,11 +11,14 @@
     $oldSiteConfig = new Zend_Config_Ini('config.ini', 'old_site', null);
     $newSiteConfig = new Zend_Config_Ini('config.ini', 'new_site', null);
 
-    $emailLabsSync = new EmailLabs_Sync($oldSiteConfig->toArray(), $newSiteConfig->toArray());
+    $origin = $oldSiteConfig->toArray();
+    $target = $newSiteConfig->toArray();
 
+    $emailLabsSync = new EmailLabs_Sync($origin, $target);
+    
     try {
-        $emailLabsSync->attach(new EmailLabs_Logger('sync.log'));
-        $emailLabsSync->syncActive();
+        $emailLabsSync->attach(new EmailLabs_Logger('log/sync.log'));
+        $emailLabsSync->syncRecords(array('type' => 'active', 'start_datetime' => 300));
     } catch(Exception $e) {
         echo $e->getMessage();
     }

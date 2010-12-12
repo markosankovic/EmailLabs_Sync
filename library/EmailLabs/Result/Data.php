@@ -29,7 +29,7 @@ class EmailLabs_Result_Data
     /**
      * Parsed result.
      *
-     * @var stdClass
+     * @var array
      */
     protected $_data;
 
@@ -63,7 +63,7 @@ class EmailLabs_Result_Data
     /**
      * Get parsed data.
      *
-     * @return stdClass
+     * @return array
      */
     public function getData()
     {
@@ -92,7 +92,7 @@ class EmailLabs_Result_Data
     {
         return $this->_xml;
     }
-    
+
     /**
      * Get result type.
      *
@@ -102,7 +102,7 @@ class EmailLabs_Result_Data
     {
         return $this->getXml()->TYPE->__toString();
     }
-    
+
     /**
      * See if error occured.
      *
@@ -126,7 +126,7 @@ class EmailLabs_Result_Data
     /**
      * Parse general data response.
      */
-    public function parse()
+    protected function parse()
     {
         // TODO: If DATA has attributes return assoc array
         $this->_data = isset($this->getXml()->DATA) ? $this->getXml()->DATA->__toString() : "";

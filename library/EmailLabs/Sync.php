@@ -31,28 +31,32 @@ require_once 'EmailLabs/Client.php';
 class EmailLabs_Sync implements SplSubject, EmailLabs_Loggable
 {
     /**
-     * Sync from old site to new
-     */
-    const DIRECTION_OLD_NEW = 1;
-
-    /**
-     * Sync from new site to old
-     */
-    const DIRECTION_NEW_OLD = 2;
-
-    /**
-     * Old site configuration.
+     * Origin site config.
      *
      * @var array
      */
-    protected $_oldSiteConfig;
+    protected $_origin;
 
     /**
-     * New site configuration.
+     * Origin site client.
+     *
+     * @var EmailLabs_Client
+     */
+    protected $_originClient;
+
+    /**
+     * Target site config.
      *
      * @var array
      */
-    protected $_newSiteConfig;
+    protected $_target;
+
+    /**
+     * Target site client.
+     *
+     * @var EmailLabs_Client
+     */
+    protected $_targetClient;
 
     /**
      * Attachable observers.
@@ -62,23 +66,26 @@ class EmailLabs_Sync implements SplSubject, EmailLabs_Loggable
     private $_observers = array();
 
     /**
-     * Use exception as means of holding current object's state.
+     * Use message exception as means of message exchange with observers.
      *
      * @var Exception
      */
-    private $_exception;
+    private $_messageException;
 
     /**
      * Instantiate new EmailLabs Sync object.
-     * Two array configs should be supplied: old(origin) and new(target).
-     * 
-     * @param array $oldSiteConfig
-     * @param array $newSiteConfig
+     * Two array configs should be supplied: origin and target.
+     *
+     * @param array $origin
+     * @param array $target
      */
-    public function __construct(array $oldSiteConfig, array $newSiteConfig)
+    public function __construct(array $origin, array $target)
     {
-        $this->_oldSiteConfig = $oldSiteConfig;
-        $this->_newSiteConfig = $newSiteConfig;
+        $this->_origin = $origin;
+        $this->_target = $target;
+
+        $this->_originClient = new EmailLabs_Client($origin['endpoint'], $origin['site_id'], $origin['password']);
+        $this->_targetClient = new EmailLabs_Client($target['endpoint'], $target['site_id'], $target['password']);
     }
 
     /**
@@ -86,47 +93,28 @@ class EmailLabs_Sync implements SplSubject, EmailLabs_Loggable
      */
     protected function _checkMailingListsRequirements()
     {
-        $old = $this->getOldSiteConfig();
-        $new = $this->getNewSiteConfig();
+        $origin = $this->getOrigin();
+        $target = $this->getTarget();
         // Mailing lists mlid mapping is required
-        if(empty($old['mailing_lists']['mlid']) or empty($old['mailing_lists']['mlid'])) {
+        if(empty($origin['mailing_lists']['mlid']) or empty($origin['mailing_lists']['mlid'])) {
             throw new Exception('Configurations should contain mailing lists mapping');
         }
         // There should be equal number of mailing lists mlid
-        if(@count($old['mailing_lists']['mlid']) != @count($new['mailing_lists']['mlid'])) {
+        if(@count($target['mailing_lists']['mlid']) != @count($target['mailing_lists']['mlid'])) {
             throw new Exception('Number of mailing lists map should match');
         }
     }
 
     /**
-     * Get direction list in order: $origin, $target
-     *
-     * @param int $direction
-     * @return array
-     */
-    protected function _getDirectionList($direction)
-    {
-        if($direction == self::DIRECTION_OLD_NEW) {
-            $origin = $this->getOldSiteConfig();
-            $target = $this->getNewSiteConfig();
-        } else {
-            $origin = $this->getNewSiteConfig();
-            $target = $this->getOldSiteConfig();
-        }
-        
-        return array($origin, $target);
-    }
-
-    /**
-     * Set exception.
+     * Set message exception.
      *
      * @param string $message
      * @param int $code
      * @return EmailLabs_Sync
      */
-    protected function _setException($message, $code)
+    protected function _setMessageException($message, $code)
     {
-        $this->_exception = new Exception($message, $code, null);
+        $this->_messageException = new Exception($message, $code, null);
         return $this;
     }
 
@@ -139,6 +127,7 @@ class EmailLabs_Sync implements SplSubject, EmailLabs_Loggable
     {
         $id = spl_object_hash($observer);
         $this->_observers[$id] = $observer;
+        return $this;
     }
 
     /**
@@ -150,6 +139,7 @@ class EmailLabs_Sync implements SplSubject, EmailLabs_Loggable
     {
         $id = spl_object_hash($observer);
         unset($this->_observers[$id]);
+        return $this;
     }
 
     /**
@@ -159,29 +149,49 @@ class EmailLabs_Sync implements SplSubject, EmailLabs_Loggable
      */
     public function getLoggableMessage()
     {
-        if($this->_exception instanceof Exception) {
-            return $this->_exception;
+        if($this->_messageException instanceof Exception) {
+            return $this->_messageException;
         }
     }
 
     /**
-     * Get new site configuration.
+     * Get target site configuration.
      *
      * @return array
      */
-    public function getNewSiteConfig()
+    public function getTarget()
     {
-        return $this->_newSiteConfig;
+        return $this->_target;
     }
 
     /**
-     * Get old site configuration.
+     * Get target client.
+     *
+     * @return EmailLabs_Client
+     */
+    public function getTargetClient()
+    {
+        return $this->_targetClient;
+    }
+
+    /**
+     * Get origin site configuration.
      *
      * @return array
      */
-    public function getOldSiteConfig()
+    public function getOrigin()
     {
-        return $this->_oldSiteConfig;
+        return $this->_origin;
+    }
+
+    /**
+     * Get origin client.
+     *
+     * @return EmailLabs_Client
+     */
+    public function getOriginClient()
+    {
+        return $this->_originClient;
     }
 
     /**
@@ -202,61 +212,227 @@ class EmailLabs_Sync implements SplSubject, EmailLabs_Loggable
      * If record already exists on the list on newsite, the record is not added again rather the record on newsite is updated.
      *
      * @param int $joinedDays Number of previous days
-     * @param int $direction
      */
-    public function syncActive($joinedDays = 200, $direction = self::DIRECTION_OLD_NEW)
+    public function syncRecords(array $params)
     {
-        $this->_setException("Some message", Zend_Log::CRIT)->notify();
+        $this->_setMessageException("Some message", Zend_Log::CRIT)->notify();
 
-        // Get origin and target upon direction
-        list($origin, $target) = $this->_getDirectionList($direction);
+        $origin = $this->getOrigin();
+        $target = $this->getTarget();
 
         // Check mailing lists requirements
         $this->_checkMailingListsRequirements();
 
         // Instantiate EmailLabs clients
-        $emailLabsClientOrigin = new EmailLabs_Client($origin['endpoint'], $origin['site_id'], $origin['password']);
-        $emailLabsClientTarget = new EmailLabs_Client($target['endpoint'], $target['site_id'], $target['password']);
+        $originClient = $this->getOriginClient();
+        $targetClient = $this->getTargetClient();
 
         // Sync mailing lists
         foreach ($origin['mailing_lists']['mlid'] as $key => $mlid) {
 
             // Set message list id
-            $emailLabsClientOrigin->setMlid($mlid);
+            $originClient->setMlid($mlid);
+            $targetClient->setMlid($target['mailing_lists']['mlid'][$key]);
 
-            // Change client's password if one is set for mailing list
-            if(isset($origin['mailing_lists']['password'][$key])) {
-                $emailLabsClientOrigin->setPassword($origin['mailing_lists']['password'][$key]);
-            } else {
-                $emailLabsClientOrigin->setPassword($origin['password']);
+            // Change origin client's password if one is set for mailing list
+            if(isset($origin['mailing_lists']['password'][$key])) $originClient->setPassword($origin['mailing_lists']['password'][$key]);
+            else $originClient->setPassword($origin['password']);
+
+            // Change target client's password if one is set for mailing list
+            if(isset($target['mailing_lists']['password'][$key])) $targetClient->setPassword($target['mailing_lists']['password'][$key]);
+            else $targetClient->setPassword($target['password']);
+
+            // Set all available query listdata parameters
+            
+            // Encoding
+            if(isset($params['encoding']))      $originClient->addData($params['encoding'], 'extra', 'encoding');
+            // Go to Page Number
+            if(isset($params['page']))          $originClient->addData((int)$params['page'], 'extra', 'page');
+            // # of Records to Show
+            if(isset($params['pagelimit']))     $originClient->addData((int)$params['pagelimit'], 'extra', 'pagelimit');
+            // Show by Date
+            if(isset($params['date'])) {
+                if(preg_match("/^([A-Z]+[a-z]+\s\d{1,2},\s\d{4,4}).*$/", $params['date'])) {
+                    $originClient->addData((int)$params['date'], 'extra', 'date');
+                }
+            }
+            // Show records after start_datetime
+            if(isset($params['start_datetime'])) {
+                if(is_int($params['start_datetime'])) {
+                    $originClient->addData(date("F d, Y", time() - abs($params['start_datetime']) * 86400), 'extra', 'start_datetime');
+                } else {
+                    if(preg_match("/^([A-Z]+[a-z]+\s\d{1,2},\s\d{4,4}).*$/", $params['start_datetime'])) {
+                        $originClient->addData((int)$params['start_datetime'], 'extra', 'start_datetime');
+                    }
+                }
+            }
+            // Show records before end_datetime
+            if(isset($params['end_datetime'])) {
+                if(is_int($params['end_datetime'])) {
+                    $originClient->addData(date("F d, Y", time() - abs($params['end_datetime']) * 86400), 'extra', 'end_datetime');
+                } else {
+                    if(preg_match("/^([A-Z]+[a-z]+\s\d{1,2},\s\d{4,4}).*$/", $params['end_datetime'])) {
+                        $originClient->addData((int)$params['end_datetime'], 'extra', 'end_datetime');
+                    }
+                }
+            }
+            // Show by Type: active, trashed, unsubscribed, bounced, or trashedbyadmin
+            if(isset($params['type'])) {
+                $type = in_array($params['type'], array('active', 'trashed', 'unsubscribed', 'bounced', 'trashedbyadmin')) ? $params['type'] : 'active';
+                $originClient->addData($type, 'extra', 'type');
             }
 
-            // Get only active
-            $emailLabsClientOrigin->addData('active', 'extra', 'type');
+            // End of Set all available query listdata parameters
 
-            // Get joined in past ($joinedDays) days. If 0 all records will be fetched.
-            if($joinedDays) {
-                $emailLabsClientOrigin->addData(date("F d, Y", time() - (int)$joinedDays * 86400), 'extra', 'start_datetime');
-            }
-
+            // Sync demographic data. Mapping between origin and target will be returned.
+            $demographicMapping = $this->syncDemographic($mlid, $target['mailing_lists']['mlid'][$key], false);
+            
             // Get mailing list records
-            $originListResult = $emailLabsClientOrigin->recordQueryListdata();
+            $originResult = $originClient->recordQueryListdata();
 
-            if($originListResult->isError()) {
+            if($originResult->isError()) {
                 // Log Error
                 continue;
             }
-            
-            
-            $records = $originListResult->getData();
+
+            $records = $originResult->getData();
 
             // For each record update target list
             foreach ($records as $key => $record) {
-                //var_dump($record);
-            }
+                
+                $data = array();
+                $email = "";
 
-            // Log success, failure
-        }
+                foreach($record as $type => $value) {
+                    // If value is array, like: extra, demographic etc
+                    if(is_array($value)) {
+                        foreach ($value as $id => $name) {
+                            // If demographic get id from demographic mapping
+                            if($type == "demographic") {
+                                if(isset($demographicMapping[$id])) { // Mapping exists
+                                    $data[] = array("type" => $type, "id" => $demographicMapping[$id], "value" => $name);
+                                } else {
+                                    // Log inappropriate demographic mapping
+                                }
+                            } else {
+                                $data[] = array("type" => $type, "id" => $id, "value" => $name);
+                            }
+                        }
+                    } else {
+                        if($type == "email") $email = $value; // Remember email
+                        echo $email . "\n";
+                        $data[] = array("type" => $type, "value" => $value);
+                    }
+                }
+                
+                // Perform record add request
+                if($data) {
+                    // See if record with same email exists
+                    $recordQueryDataResult = $targetClient->recordQueryData($email);
+                    // Add or update
+                    if($recordQueryDataResult->isSuccess()) { // Record exists, update
+                        $recordUpdateResult = $targetClient->perform('record', 'update', $data);
+                        if($recordUpdateResult->isError()) {
+                            // TODO: Log Error
+                        } else {
+                            // TODO: Log Success
+                        }
+                    } else { // Add record
+                        $recordAddResult = $targetClient->perform('record', 'add', $data);
+                        if($recordAddResult->isError()) {
+                            // TODO: Log Error
+                        } else {
+                            // TODO: Log Success
+                        }
+                    }
+                }
+
+            } // End loop records
+
+        } // End loop mailing lists
     }
-    
+
+    /**
+     * Sync demographic data between separate mailing lists
+     *
+     * Returns hashed map array where key is origin's demographic id
+     * and value is target's demographic id.
+     *
+     * @param int $originMlid
+     * @param int $targetMlid
+     * @param boolean $updateExisting
+     * @return array Hashed map
+     */
+    public function syncDemographic($originMlid, $targetMlid, $updateExisting = false)
+    {
+        // Origin client
+        $originClient = $this->getOriginClient();
+        $originClient->setMlid($originMlid);
+        // Target client
+        $targetClient = $this->getTargetClient();
+        $targetClient->setMlid($targetMlid);
+
+        // Query enabled demographic on origin site
+        $originEnabledDetails = $originClient->perform('demographic', 'query-enabled-details', array(), 'EmailLabs_Result_Record');
+        $originEnabledDetailsData = $originEnabledDetails->getData();
+        // Query all (enabled/disabled) demographic on target site - options excluded
+        $targetEnabledDetails = $targetClient->perform('demographic', 'query-all', array(), 'EmailLabs_Result_Record');
+        $targetEnabledDetailsData = $targetEnabledDetails->getData();
+        
+        // Origin and target id mapping
+        $mapping = array();
+
+        foreach($originEnabledDetailsData as $originRecord) {
+            if(is_array($targetEnabledDetailsData)) {
+                foreach($targetEnabledDetailsData as $targetRecord) {
+                    // If demographic match do update, skip rest of target records
+                    if($originRecord['name'] == $targetRecord['name']) {
+                        // Update
+                        if($updateExisting) {
+                            // Add data
+                            $targetClient->clearData()->addData($originRecord['name'], $originRecord['type'])
+                                                      ->addData($targetRecord['id'], 'id')
+                                                      ->addData('enabled', 'state');
+                            // Add options (Select List)
+                            if(isset($originRecord['option'])) {
+                                foreach($originRecord['option'] as $option) {
+                                    $targetClient->addData($option, 'option');
+                                }
+                            }
+                            // Perform demographic update request
+                            $result = $targetClient->perform('demographic', 'update');
+
+                            if($result->isError()) {
+                                // TODO: Log error
+                            }
+                        }
+                        // Add mapping ids
+                        $mapping[$originRecord['id']] = $targetRecord['id'];
+                        continue 2; // continue on origin records
+                    }
+                }
+            }
+            
+            // Add data
+            $targetClient->clearData()->addData($originRecord['name'], $originRecord['type'])
+                                      ->addData('enabled', 'state'); // Set initial state
+            // Add options (Select List)
+            if(isset($originRecord['option'])) {
+                foreach($originRecord['option'] as $option) {
+                    $targetClient->addData($option, 'option');
+                }
+            }
+            // Perform demographic add request
+            $result = $targetClient->perform('demographic', 'add');
+            // If successfully added, map target's demographic id to origin's
+            if($result->isSuccess()) {
+                $targetDemographicId = $result->getData();
+                $mapping[$originRecord['id']] = $targetDemographicId;
+            } else {
+                // TODO: Log error
+            }
+        }
+
+        return $mapping;
+    }
 }

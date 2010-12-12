@@ -71,8 +71,18 @@ class EmailLabs_Logger implements SplObserver
         if($writer instanceof Zend_Log_Writer_Abstract) {
             $this->_logger->addWriter($writer);
         }
-        
+
         return $this;
+    }
+
+    /**
+     * Get logger.
+     *
+     * @return Zend_Log
+     */
+    public function getLogger()
+    {
+        return $this->_logger;
     }
 
     /**
@@ -82,10 +92,10 @@ class EmailLabs_Logger implements SplObserver
      */
     public function update(SplSubject $subject)
     {
-        if(method_exists($subject, 'getLoggableMessage')) {
+        if($subject instanceof EmailLabs_Loggable) {
             $loggableMessage = $subject->getLoggableMessage();
         }
-        
+
         if(isset($loggableMessage)) {
             if(is_string($loggableMessage)) {
                 $message = $loggableMessage; $priority = Zend_Log::INFO;

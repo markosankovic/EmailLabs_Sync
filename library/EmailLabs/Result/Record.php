@@ -30,14 +30,14 @@ class EmailLabs_Result_Record extends EmailLabs_Result_Data
      *
      * @return EmailLabs_Result_Record
      */
-    public function parse()
+    protected function parse()
     {
         // If error occured parse general data
         if($this->isError()) {
             parent::parse();
             return $this;
         }
-        
+
         // Parse all RECORD elements
         $records = array();
         foreach($this->getXml()->RECORD as $record) {
@@ -55,7 +55,7 @@ class EmailLabs_Result_Record extends EmailLabs_Result_Data
                     $value = $child->__toString();
                     if($attributes['type'] == 'extra') $data['extra'][$attributes['id']] = $value;
                     else if($attributes['type'] == 'demographic') $data['demographic'][$attributes['id']] = $value;
-                    else if($attributes['type'] == 'option') $data['option'][$attributes['id']] = $value;
+                    else if($attributes['type'] == 'option') $data['option'][] = $value;
                     // Type only
                     else $data[$attributes['type']] = $value;
                 }
@@ -66,5 +66,4 @@ class EmailLabs_Result_Record extends EmailLabs_Result_Data
         $this->_data = $records;
         return $this;
     }
-    
 }

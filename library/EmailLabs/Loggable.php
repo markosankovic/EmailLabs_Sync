@@ -26,4 +26,3 @@ interface EmailLabs_Loggable
 {
     public function getLoggableMessage();
 }
-

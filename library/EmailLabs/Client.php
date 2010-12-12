@@ -80,6 +80,7 @@ class EmailLabs_Client
      *
      * @param string $endpoint
      * @param string $siteId
+     * @param string $password
      */
     public function __construct($endpoint, $siteId, $password)
     {
@@ -128,6 +129,7 @@ XML;
      * @param string $value
      * @param string $type
      * @param string $id
+     * @param urlencode boolean
      * @return EmailLabs_Client
      */
     public function addData($value, $type, $id = null, $urlencode = false)
@@ -149,6 +151,11 @@ XML;
         return $this;
     }
 
+    public function demographicAdd()
+    {
+        return new EmailLabs_Result_Data($this->_request('demographic', 'add'));
+    }
+
     /**
      * Get data.
      *
@@ -163,7 +170,7 @@ XML;
      * Get data part prepared for request.
      *
      * @param boolean $urlencode
-     * @return string 
+     * @return string
      */
     public function getDataPrepared()
     {
@@ -238,6 +245,24 @@ XML;
     }
 
     /**
+     * Perform request.
+     *
+     * This method could be used for performing almost all
+     * types and activities described in API documentation.
+     *
+     * @param string $type
+     * @param string $activity
+     * @param array $data
+     * @param EmailLabs_Result_Data $result
+     * @return EmailLabs_Result_Data
+     */
+    public function perform($type, $activity, array $data = array(), $result = 'EmailLabs_Result_Data')
+    {
+        $this->setData($data);
+        return new $result($this->_request($type, $activity));
+    }
+
+    /**
      * Data Handling
      * 4.5 Activity: Query-Data
      *
@@ -271,7 +296,7 @@ XML;
      *
      * @param string $email
      * @param string $mlid
-     * @return EmailLabs_Result_Data 
+     * @return EmailLabs_Result_Data
      */
     public function recordUpdate($email, $mlid = null)
     {
@@ -290,7 +315,10 @@ XML;
      */
     public function setData(array $data)
     {
-        $this->_data = $data;
+        foreach($data as $one) {
+            $this->addData($one['value'], $one['type'], @$one['id']);
+        }
+
         return $this;
     }
 
@@ -322,7 +350,7 @@ XML;
      * Get password.
      *
      * @param string $password
-     * @return EmailLabs_Client 
+     * @return EmailLabs_Client
      */
     public function setPassword($password)
     {
@@ -342,4 +370,3 @@ XML;
         return $this;
     }
 }
-    
