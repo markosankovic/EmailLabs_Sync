@@ -15,7 +15,7 @@
     $target = $newSiteConfig->toArray();
 
     $emailLabsSync = new EmailLabs_Sync($origin, $target);
-    $logger = new EmailLabs_Logger('log/sync.log');
+    $logger = new EmailLabs_Logger('log/process_1.log');
 
     try {
         $emailLabsSync->attach();

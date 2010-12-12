@@ -207,16 +207,19 @@ class EmailLabs_Sync implements SplSubject, EmailLabs_Loggable
     }
 
     /**
-     * Retrieve the newly added (since start of yesterday) records with a status of "active" from the oldsite.
-     * Add retrieved records to the equivalent list on newsite.
-     * If record already exists on the list on newsite, the record is not added again rather the record on newsite is updated.
+     * Sync mailing lists (memeber records and demographic data) between
+     * EmailLabs sites (organizations)
+     * 
+     * If you don't update demographic data,
+     * syncing demographic will perform faster
+     * since only the mapping will be procesuired.
      *
-     * @param int $joinedDays Number of previous days
+     * @param array $params see 4.5 Activity: Query-Listdata
+     * @param boolean $updateExistingDemographic
      */
-    public function syncRecords(array $params)
+    public function syncRecords(array $params, $updateExistingDemographic = false)
     {
-        $this->_setMessageException("Some message", Zend_Log::CRIT)->notify();
-
+        // Get configs
         $origin = $this->getOrigin();
         $target = $this->getTarget();
 
@@ -226,6 +229,48 @@ class EmailLabs_Sync implements SplSubject, EmailLabs_Loggable
         // Instantiate EmailLabs clients
         $originClient = $this->getOriginClient();
         $targetClient = $this->getTargetClient();
+
+        // Set all available query listdata parameters
+
+        // Encoding
+        if(isset($params['encoding']))      $originClient->addData($params['encoding'], 'extra', 'encoding');
+        // Go to Page Number
+        if(isset($params['page']))          $originClient->addData((int)$params['page'], 'extra', 'page');
+        // # of Records to Show
+        if(isset($params['pagelimit']))     $originClient->addData((int)$params['pagelimit'], 'extra', 'pagelimit');
+        // Show by Date
+        if(isset($params['date'])) {
+            if(preg_match("/^[A-Z]+[a-z]+\s\d{1,2},\s\d{4,4}$/", $params['date'])) {
+                $originClient->addData((int)$params['date'], 'extra', 'date');
+            }
+        }
+        // Show records after start_datetime
+        if(isset($params['start_datetime'])) {
+            if(is_int($params['start_datetime'])) {
+                $originClient->addData(date("F d, Y", time() - abs($params['start_datetime']) * 86400), 'extra', 'start_datetime');
+            } else {
+                if(preg_match("/^[A-Z]+[a-z]+\s\d{1,2},\s\d{4,4}$/", $params['start_datetime'])) {
+                    $originClient->addData((int)$params['start_datetime'], 'extra', 'start_datetime');
+                }
+            }
+        }
+        // Show records before end_datetime
+        if(isset($params['end_datetime'])) {
+            if(is_int($params['end_datetime'])) {
+                $originClient->addData(date("F d, Y", time() - abs($params['end_datetime']) * 86400), 'extra', 'end_datetime');
+            } else {
+                if(preg_match("/^[A-Z]+[a-z]+\s\d{1,2},\s\d{4,4}$/", $params['end_datetime'])) {
+                    $originClient->addData((int)$params['end_datetime'], 'extra', 'end_datetime');
+                }
+            }
+        }
+        // Show by Type: active, trashed, unsubscribed, bounced, or trashedbyadmin
+        if(isset($params['type'])) {
+            $type = in_array($params['type'], array('active', 'trashed', 'unsubscribed', 'bounced', 'trashedbyadmin')) ? $params['type'] : 'active';
+            $originClient->addData($type, 'extra', 'type');
+        }
+
+        // End of Set all available query listdata parameters
 
         // Sync mailing lists
         foreach ($origin['mailing_lists']['mlid'] as $key => $mlid) {
@@ -242,56 +287,14 @@ class EmailLabs_Sync implements SplSubject, EmailLabs_Loggable
             if(isset($target['mailing_lists']['password'][$key])) $targetClient->setPassword($target['mailing_lists']['password'][$key]);
             else $targetClient->setPassword($target['password']);
 
-            // Set all available query listdata parameters
-            
-            // Encoding
-            if(isset($params['encoding']))      $originClient->addData($params['encoding'], 'extra', 'encoding');
-            // Go to Page Number
-            if(isset($params['page']))          $originClient->addData((int)$params['page'], 'extra', 'page');
-            // # of Records to Show
-            if(isset($params['pagelimit']))     $originClient->addData((int)$params['pagelimit'], 'extra', 'pagelimit');
-            // Show by Date
-            if(isset($params['date'])) {
-                if(preg_match("/^([A-Z]+[a-z]+\s\d{1,2},\s\d{4,4}).*$/", $params['date'])) {
-                    $originClient->addData((int)$params['date'], 'extra', 'date');
-                }
-            }
-            // Show records after start_datetime
-            if(isset($params['start_datetime'])) {
-                if(is_int($params['start_datetime'])) {
-                    $originClient->addData(date("F d, Y", time() - abs($params['start_datetime']) * 86400), 'extra', 'start_datetime');
-                } else {
-                    if(preg_match("/^([A-Z]+[a-z]+\s\d{1,2},\s\d{4,4}).*$/", $params['start_datetime'])) {
-                        $originClient->addData((int)$params['start_datetime'], 'extra', 'start_datetime');
-                    }
-                }
-            }
-            // Show records before end_datetime
-            if(isset($params['end_datetime'])) {
-                if(is_int($params['end_datetime'])) {
-                    $originClient->addData(date("F d, Y", time() - abs($params['end_datetime']) * 86400), 'extra', 'end_datetime');
-                } else {
-                    if(preg_match("/^([A-Z]+[a-z]+\s\d{1,2},\s\d{4,4}).*$/", $params['end_datetime'])) {
-                        $originClient->addData((int)$params['end_datetime'], 'extra', 'end_datetime');
-                    }
-                }
-            }
-            // Show by Type: active, trashed, unsubscribed, bounced, or trashedbyadmin
-            if(isset($params['type'])) {
-                $type = in_array($params['type'], array('active', 'trashed', 'unsubscribed', 'bounced', 'trashedbyadmin')) ? $params['type'] : 'active';
-                $originClient->addData($type, 'extra', 'type');
-            }
-
-            // End of Set all available query listdata parameters
-
             // Sync demographic data. Mapping between origin and target will be returned.
-            $demographicMapping = $this->syncDemographic($mlid, $target['mailing_lists']['mlid'][$key], false);
-            
+            $demographicMapping = $this->syncDemographic($mlid, $target['mailing_lists']['mlid'][$key], $updateExistingDemographic);
+
             // Get mailing list records
             $originResult = $originClient->recordQueryListdata();
 
             if($originResult->isError()) {
-                // Log Error
+                $this->_setMessageException($message, Zend_Log);
                 continue;
             }
 
@@ -301,6 +304,7 @@ class EmailLabs_Sync implements SplSubject, EmailLabs_Loggable
             foreach ($records as $key => $record) {
                 
                 $data = array();
+                $targetClient->clearData(); // Clear previous data so we don't forge bad request
                 $email = "";
 
                 foreach($record as $type => $value) {
@@ -320,7 +324,6 @@ class EmailLabs_Sync implements SplSubject, EmailLabs_Loggable
                         }
                     } else {
                         if($type == "email") $email = $value; // Remember email
-                        echo $email . "\n";
                         $data[] = array("type" => $type, "value" => $value);
                     }
                 }
@@ -333,16 +336,16 @@ class EmailLabs_Sync implements SplSubject, EmailLabs_Loggable
                     if($recordQueryDataResult->isSuccess()) { // Record exists, update
                         $recordUpdateResult = $targetClient->perform('record', 'update', $data);
                         if($recordUpdateResult->isError()) {
-                            // TODO: Log Error
+                            $this->_setMessageException("Record update failed for '$email': " . $recordUpdateResult->getData(), Zend_Log::ERR)->notify();
                         } else {
-                            // TODO: Log Success
+                            $this->_setMessageException("Record update succeeded for '$email': " . $recordUpdateResult->getData(), Zend_Log::INFO)->notify();
                         }
                     } else { // Add record
                         $recordAddResult = $targetClient->perform('record', 'add', $data);
                         if($recordAddResult->isError()) {
-                            // TODO: Log Error
+                            $this->_setMessageException("Record add failed for '$email': " . $recordAddResult->getData(), Zend_Log::ERR)->notify();
                         } else {
-                            // TODO: Log Success
+                            $this->_setMessageException("Record add succeeded for '$email': " . $recordAddResult->getData(), Zend_Log::INFO)->notify();
                         }
                     }
                 }
@@ -403,7 +406,9 @@ class EmailLabs_Sync implements SplSubject, EmailLabs_Loggable
                             $result = $targetClient->perform('demographic', 'update');
 
                             if($result->isError()) {
-                                // TODO: Log error
+                                $this->_setMessageException("Demographic update failed for {$originRecord['name']}({$originRecord['id']}): " . $result->getData(), Zend_Log::ERR)->notify();
+                            } else {
+                                $this->_setMessageException("Demographic update succeeded for {$originRecord['name']}({$originRecord['id']}): " . $result->getData(), Zend_Log::INFO)->notify();
                             }
                         }
                         // Add mapping ids
@@ -428,8 +433,9 @@ class EmailLabs_Sync implements SplSubject, EmailLabs_Loggable
             if($result->isSuccess()) {
                 $targetDemographicId = $result->getData();
                 $mapping[$originRecord['id']] = $targetDemographicId;
+                $this->_setMessageException("Demographic add succeeded {$originRecord['name']}({$originRecord['id']}): " . $result->getData(), Zend_Log::INFO)->notify();
             } else {
-                // TODO: Log error
+                $this->_setMessageException("Demographic add failed {$originRecord['name']}({$originRecord['id']}): " . $result->getData(), Zend_Log::ERR)->notify();
             }
         }
 

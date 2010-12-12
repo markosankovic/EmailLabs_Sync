@@ -32,3 +32,5 @@ Additionally there are these considerations:
 * Of key importance with this script is to default to the safest possible outcome for deliverability - where if in doubt then best to leave the member's record deactivated.
 * Any updates to either newsite or oldsite member records will need to be logged in a text file on the server - one line per update detailing the list being updated and completed details.
 
+USAGE
+
