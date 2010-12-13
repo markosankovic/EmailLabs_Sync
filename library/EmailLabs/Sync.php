@@ -96,11 +96,11 @@ class EmailLabs_Sync implements SplSubject, EmailLabs_Loggable
         $origin = $this->getOrigin();
         $target = $this->getTarget();
         // Mailing lists mlid mapping is required
-        if(empty($origin['mailing_lists']['mlid']) or empty($origin['mailing_lists']['mlid'])) {
+        if(empty($origin['mailing_lists']['mlid']) or empty($target['mailing_lists']['mlid'])) {
             throw new Exception('Configurations should contain mailing lists mapping');
         }
         // There should be equal number of mailing lists mlid
-        if(@count($target['mailing_lists']['mlid']) != @count($target['mailing_lists']['mlid'])) {
+        if(@count($origin['mailing_lists']['mlid']) != @count($target['mailing_lists']['mlid'])) {
             throw new Exception('Number of mailing lists map should match');
         }
     }

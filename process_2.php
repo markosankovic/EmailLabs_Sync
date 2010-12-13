@@ -12,8 +12,8 @@
     $newSiteConfig = new Zend_Config_Ini('config.ini', 'new_site', null);
 
     // Set origin and target
-    $origin = $newSiteConfig->toArray();
-    $target = $oldSiteConfig->toArray();
+    $origin = $oldSiteConfig->toArray();
+    $target = $newSiteConfig->toArray();
 
     // Instantiate Sync and accomodating Logger
     $emailLabsSync = new EmailLabs_Sync($origin, $target);
